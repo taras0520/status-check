@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status Check</title>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1f232c; --line:#2a2f3a;
+    --ink:#e7e9ee; --muted:#8b93a3; --accent:#e8ff5a;
+    --s-to_check:#4aa3ff; --s-expired:#ff5d5d; --s-done:#3ddc97;
+    --s-not_actual:#6b7280; --s-ideas_backlog:#c084fc;
+    --font-d:'Archivo',sans-serif; --font-m:'Spline Sans Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-m);
+    background-image:radial-gradient(circle at 1px 1px,#1c2029 1px,transparent 0);background-size:22px 22px}
+  header{display:flex;align-items:baseline;gap:16px;padding:22px 28px;border-bottom:1px solid var(--line)}
+  header h1{font-family:var(--font-d);font-weight:800;font-size:26px;letter-spacing:-.5px}
+  header h1 b{color:var(--accent)}
+  header .tag{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px}
+  .bar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;padding:18px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
+  select,input,textarea{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:9px 11px;font-family:var(--font-m);font-size:13px;outline:none}
+  select:focus,input:focus,textarea:focus{border-color:var(--accent)}
+  .btn{background:var(--accent);color:#10130a;border:none;border-radius:8px;padding:10px 16px;
+    font-family:var(--font-d);font-weight:700;font-size:13px;cursor:pointer;transition:.15s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:var(--s-expired);color:#fff}
+  .legend{display:flex;gap:14px;margin-left:auto;align-items:center;flex-wrap:wrap}
+  .legend span{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+  #calendar{padding:22px 28px;max-width:1300px}
+  /* FullCalendar dark theming */
+  .fc{--fc-border-color:var(--line);--fc-page-bg-color:transparent;
+    --fc-neutral-bg-color:var(--panel);--fc-today-bg-color:#1b2330}
+  .fc .fc-toolbar-title{font-family:var(--font-d);font-weight:800}
+  .fc .fc-button{background:var(--panel-2);border:1px solid var(--line);font-family:var(--font-m);text-transform:capitalize}
+  .fc .fc-button-primary:not(:disabled).fc-button-active{background:var(--accent);color:#10130a;border-color:var(--accent)}
+  .fc-daygrid-event{border:none;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600}
+  .fc-col-header-cell,.fc-daygrid-day-number{color:var(--muted)}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(5,7,10,.7);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;z-index:50}
+  .overlay.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(560px,92vw);
+    max-height:90vh;overflow:auto;padding:24px}
+  .modal h2{font-family:var(--font-d);font-weight:800;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid .full{grid-column:1/-1}
+  .modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel-2);
+    border:1px solid var(--line);padding:12px 18px;border-radius:10px;font-size:13px;display:none;z-index:60}
+  .toast.on{display:block}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Status<b>Check</b></h1>
+  <span class="tag">контроль комітментів • спільний календар</span>
+</header>
+
+<div class="bar">
+  <div class="field">
+    <label>Проєкт</label>
+    <select id="f-project"><option value="">Усі проєкти</option></select>
+  </div>
+  <div class="field">
+    <label>Відповідальний за перевірку</label>
+    <select id="f-checker"><option value="">Усі рев'юери</option></select>
+  </div>
+  <button class="btn ghost" onclick="loadCommitments()">↻ Оновити</button>
+  <button class="btn" onclick="openCreate()">+ Комітмент</button>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--s-to_check)"></i>to check</span>
+    <span><i class="dot" style="background:var(--s-expired)"></i>expired</span>
+    <span><i class="dot" style="background:var(--s-done)"></i>done</span>
+    <span><i class="dot" style="background:var(--s-not_actual)"></i>not actual</span>
+    <span><i class="dot" style="background:var(--s-ideas_backlog)"></i>ideas backlog</span>
+  </div>
+</div>
+
+<div id="calendar"></div>
+
+<!-- Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modal-title">Новий комітмент</h2>
+    <input type="hidden" id="c-id">
+    <div class="grid">
+      <div class="field full"><label>Title *</label><input id="c-title"></div>
+      <div class="field full"><label>Опис</label><textarea id="c-description" rows="2"></textarea></div>
+      <div class="field"><label>Проєкт *</label><input id="c-project"></div>
+      <div class="field"><label>Статус</label>
+        <select id="c-status">
+          <option value="to_check">to check</option>
+          <option value="expired">expired</option>
+          <option value="done">done</option>
+          <option value="not_actual">not actual</option>
+          <option value="ideas_backlog">ideas backlog</option>
+        </select>
+      </div>
+      <div class="field"><label>Виконавець</label><input id="c-assignee"></div>
+      <div class="field"><label>Рев'юер (checker_id) *</label><input id="c-checker"></div>
+      <div class="field"><label>Автор (author_id) *</label><input id="c-author"></div>
+      <div class="field"><label>Дедлайн</label><input id="c-deadline" type="datetime-local"></div>
+      <div class="field full" style="flex-direction:row;align-items:center;gap:8px">
+        <input type="checkbox" id="c-allday" style="width:auto"><label style="letter-spacing:1px">Лише дата (all-day)</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger" id="btn-delete" onclick="removeCommitment()" style="margin-right:auto;display:none">Видалити</button>
+      <button class="btn ghost" onclick="closeModal()">Скасувати</button>
+      <button class="btn" onclick="saveCommitment()">Зберегти</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ====== НАЛАШТУВАННЯ ======
+const WEBHOOK_URL = "https://tarask.app.n8n.cloud/webhook/status-check"; // <--  URL
+// ==========================
+
+const STATUS_COLOR = {
+  to_check:"#4aa3ff", expired:"#ff5d5d", done:"#3ddc97",
+  not_actual:"#6b7280", ideas_backlog:"#c084fc"
+};
+let calendar, cache = [];
+
+async function api(payload){
+  const res = await fetch(WEBHOOK_URL,{
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  return res.json();
+}
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("on");
+  setTimeout(()=>t.classList.remove("on"),2600);}
+
+async function loadCommitments(){
+  const project = document.getElementById("f-project").value || null;
+  const checker_id = document.getElementById("f-checker").value || null;
+  try{
+    const r = await api({action:"list", project, checker_id});
+    cache = Array.isArray(r) ? r
+      : Array.isArray(r.data) ? r.data
+      : Array.isArray(r.data?.data) ? r.data.data
+      : (r.data ? [r.data] : []); // підлаштуй під формат Respond-ноди
+    renderFilters(cache);
+    renderEvents(cache);
+  }catch(e){ toast("Помилка завантаження: "+e.message); }
+}
+
+function renderFilters(rows){
+  const projects=[...new Set(rows.map(r=>r.project).filter(Boolean))];
+  const checkers=[...new Set(rows.map(r=>r.checker_id).filter(Boolean))];
+  fillSelect("f-project", projects, "Усі проєкти");
+  fillSelect("f-checker", checkers, "Усі рев'юери");
+}
+function fillSelect(id, vals, placeholder){
+  const el=document.getElementById(id); const cur=el.value;
+  el.innerHTML=`<option value="">${placeholder}</option>`+
+    vals.map(v=>`<option value="${v}">${v}</option>`).join("");
+  el.value=cur;
+}
+
+function renderEvents(rows){
+  const events = rows.filter(r=>r.deadline).map(r=>({
+    id:r.id, title:r.title, start:r.deadline, allDay: !!r.is_all_day,
+    backgroundColor: STATUS_COLOR[r.status]||"#888",
+    extendedProps:r
+  }));
+  calendar.removeAllEvents();
+  calendar.addEventSource(events);
+}
+
+// ---- Modal ----
+function openCreate(){
+  document.getElementById("modal-title").textContent="Новий комітмент";
+  ["c-id","c-title","c-description","c-project","c-assignee","c-checker","c-author","c-deadline"]
+    .forEach(i=>document.getElementById(i).value="");
+  document.getElementById("c-status").value="to_check";
+  document.getElementById("c-allday").checked=false;
+  document.getElementById("btn-delete").style.display="none";
+  document.getElementById("overlay").classList.add("on");
+}
+function openEdit(c){
+  document.getElementById("modal-title").textContent="Редагувати комітмент";
+  document.getElementById("c-id").value=c.id;
+  document.getElementById("c-title").value=c.title||"";
+  document.getElementById("c-description").value=c.description||"";
+  document.getElementById("c-project").value=c.project||"";
+  document.getElementById("c-assignee").value=c.assignee||"";
+  document.getElementById("c-checker").value=c.checker_id||"";
+  document.getElementById("c-author").value=c.author_id||"";
+  document.getElementById("c-status").value=c.status||"to_check";
+  document.getElementById("c-allday").checked=!!c.is_all_day;
+  document.getElementById("c-deadline").value = c.deadline ? c.deadline.slice(0,16) : "";
+  document.getElementById("btn-delete").style.display="inline-block";
+  document.getElementById("overlay").classList.add("on");
+}
+function closeModal(){document.getElementById("overlay").classList.remove("on");}
+
+async function saveCommitment(){
+  const id=document.getElementById("c-id").value;
+  const dl=document.getElementById("c-deadline").value;
+  const payload={
+    action: id?"update":"create",
+    title:document.getElementById("c-title").value.trim(),
+    description:document.getElementById("c-description").value.trim(),
+    project:document.getElementById("c-project").value.trim(),
+    assignee:document.getElementById("c-assignee").value.trim()||null,
+    checker_id:document.getElementById("c-checker").value.trim(),
+    author_id:document.getElementById("c-author").value.trim(),
+    status:document.getElementById("c-status").value,
+    is_all_day:document.getElementById("c-allday").checked,
+    deadline: dl ? new Date(dl).toISOString() : null
+  };
+  if(id) payload.id=id;
+  if(!payload.title||!payload.project){toast("Title і Проєкт обов'язкові");return;}
+  try{ await api(payload); closeModal(); toast(id?"Оновлено":"Створено"); loadCommitments(); }
+  catch(e){ toast("Помилка збереження: "+e.message); }
+}
+async function removeCommitment(){
+  const id=document.getElementById("c-id").value;
+  if(!id) return;
+  if(!confirm("Видалити цей комітмент?")) return;
+  try{ await api({action:"delete", id}); closeModal(); toast("Видалено"); loadCommitments(); }
+  catch(e){ toast("Помилка видалення: "+e.message); }
+}
+
+// ---- Init ----
+document.addEventListener("DOMContentLoaded",()=>{
+  calendar=new FullCalendar.Calendar(document.getElementById("calendar"),{
+    initialView:"dayGridMonth", firstDay:1, locale:"uk",
+    height:"auto", nowIndicator:true,
+    headerToolbar:{left:"prev,next today",center:"title",right:"dayGridMonth,timeGridWeek,listWeek"},
+    eventClick:(info)=>openEdit(info.event.extendedProps),
+    dateClick:(info)=>{openCreate();document.getElementById("c-deadline").value=info.dateStr.slice(0,16);}
+  });
+  calendar.render();
+  document.getElementById("f-project").addEventListener("change",()=>renderEvents(applyClientFilter()));
+  document.getElementById("f-checker").addEventListener("change",()=>renderEvents(applyClientFilter()));
+  loadCommitments();
+});
+
+// миттєва клієнтська фільтрація з кешу (без зайвого запиту)
+function applyClientFilter(){
+  const p=document.getElementById("f-project").value;
+  const c=document.getElementById("f-checker").value;
+  return cache.filter(r=>(!p||r.project===p)&&(!c||r.checker_id===c));
+}
+</script>
+</body>
+</html>
