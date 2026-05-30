@@ -1,0 +1,471 @@
+{
+  "name": "Status Check — MVP (API + Cron)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "status-check",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "695ae6b6-ee8c-43dd-8513-5b501f01941d",
+      "name": "Webhook API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        288
+      ],
+      "webhookId": "status-check-api"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "create",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "list",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3f32eccd-6857-4705-9542-5f2fe6af6d53",
+      "name": "Switch action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -256,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO commitments\n  (author_id, title, description, project, assignee, checker_id, deadline, is_all_day, status)\nVALUES\n  ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::commitment_status, 'to_check'))\nRETURNING *;",
+        "options": {
+          "queryReplacement": "={{ $json.body.author_id }},{{ $json.body.title }},{{ $json.body.description }},{{ $json.body.project }},{{ $json.body.assignee }},{{ $json.body.checker_id }},{{ $json.body.deadline }},{{ $json.body.is_all_day }},{{ $json.body.status }}"
+        }
+      },
+      "id": "18e09b07-6c5d-4551-88f3-c897e212d438",
+      "name": "PG Create",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "0onCYboAsxY5ceBD",
+          "name": "Postgres_test"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM commitments\nWHERE (NULLIF($1,'null') IS NULL OR project = NULLIF($1,'null'))\n  AND (NULLIF($2,'null') IS NULL OR checker_id = NULLIF($2,'null')::uuid)\nORDER BY deadline NULLS LAST;",
+        "options": {
+          "queryReplacement": "={{ $json.body.project || null }},{{ $json.body.checker_id || null }}"
+        }
+      },
+      "id": "7e50a16f-8c9d-430e-af71-899fc8ad989a",
+      "name": "PG List",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        208
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "0onCYboAsxY5ceBD",
+          "name": "Postgres_test"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE commitments SET\n  title       = COALESCE(NULLIF($2,'null'), title),\n  description = COALESCE(NULLIF($3,'null'), description),\n  project     = COALESCE(NULLIF($4,'null'), project),\n  assignee    = COALESCE(NULLIF($5,'null'), assignee),\n  checker_id  = COALESCE(NULLIF($6,'null')::uuid, checker_id),\n  deadline    = COALESCE(NULLIF($7,'null')::timestamptz, deadline),\n  is_all_day  = COALESCE(NULLIF($8,'null')::boolean, is_all_day),\n  status      = COALESCE(NULLIF($9,'null')::commitment_status, status)\nWHERE id = $1\nRETURNING *;",
+        "options": {
+          "queryReplacement": "={{ $json.body.id }},{{ $json.body.title || null }},{{ $json.body.description || null }},{{ $json.body.project || null }},{{ $json.body.assignee || null }},{{ $json.body.checker_id || null }},{{ $json.body.deadline || null }},{{ $json.body.is_all_day }},{{ $json.body.status || null }}"
+        }
+      },
+      "id": "0a7e51a9-ba81-446f-ac03-6a2d3d05ee2f",
+      "name": "PG Update",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "0onCYboAsxY5ceBD",
+          "name": "Postgres_test"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM commitments WHERE id = $1 RETURNING id;",
+        "options": {
+          "queryReplacement": "={{ $json.body.id }}"
+        }
+      },
+      "id": "898454e6-78c2-478c-9990-0ea55be5c13f",
+      "name": "PG Delete",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        608
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "0onCYboAsxY5ceBD",
+          "name": "Postgres_test"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true, \"data\": $json } }}",
+        "options": {}
+      },
+      "id": "8e7760f7-6c81-4b23-9db2-ce9c0a461131",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "6347429f-2b15-4408-aed7-1281ac9b3584",
+      "name": "Schedule (hourly)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -480,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE commitments\nSET status = 'expired'\nWHERE status = 'to_check'\n  AND deadline IS NOT NULL\n  AND deadline < now()\nRETURNING *;",
+        "options": {}
+      },
+      "id": "4a5ebef7-ec7d-4026-bdc5-4adb970a1cb6",
+      "name": "PG Expire",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -256,
+        960
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "0onCYboAsxY5ceBD",
+          "name": "Postgres_test"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3f488282-cf97-4e30-8645-5dc645e4c9f7",
+      "name": "IF expired rows",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        0,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "=573274778",
+        "text": "=⚠️ Дедлайн минув по комітменту:\n«{{ $json.title }}»\nПроєкт: {{ $json.project }}\nДедлайн був: {{ DateTime.fromISO($json.deadline).toFormat('dd.MM.yyyy HH:mm') }}\nСтатус → expired",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ec049aba-61a5-489f-8d96-90c67b4e3773",
+      "name": "Telegram notify checker",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        880
+      ],
+      "webhookId": "0c39ea8d-eedb-4020-a72d-0f8ea354edf8",
+      "credentials": {
+        "telegramApi": {
+          "id": "lXAasYIaUDR0cB9I",
+          "name": "homework3_bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook API": {
+      "main": [
+        [
+          {
+            "node": "Switch action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch action": {
+      "main": [
+        [
+          {
+            "node": "PG Create",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PG List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PG Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PG Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG Create": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG List": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG Update": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG Delete": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule (hourly)": {
+      "main": [
+        [
+          {
+            "node": "PG Expire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG Expire": {
+      "main": [
+        [
+          {
+            "node": "IF expired rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF expired rows": {
+      "main": [
+        [
+          {
+            "node": "Telegram notify checker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "916ec5c9-d15e-49c2-8bd1-a7fb3d87a4d4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "145b912a5d3cff4911096b4cbe4e978fdbd27bd64ace34879c42603e0c6eee00"
+  },
+  "id": "8X6KLnb5DOemm0Ol",
+  "tags": []
+}
