@@ -224,7 +224,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"ok\": true, \"data\": $json } }}",
+        "responseBody": "={{ { \"ok\": true, \"data\": $input.all().map(item => item.json) } }}",
         "options": {}
       },
       "id": "8e7760f7-6c81-4b23-9db2-ce9c0a461131",
@@ -461,7 +461,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "916ec5c9-d15e-49c2-8bd1-a7fb3d87a4d4",
+  "versionId": "09ff6fc2-d954-4ff9-a1a8-0efedac428df",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "145b912a5d3cff4911096b4cbe4e978fdbd27bd64ace34879c42603e0c6eee00"
