@@ -181,8 +181,8 @@ function renderEvents(rows){
     backgroundColor: STATUS_COLOR[r.status]||"#888",
     extendedProps:r
   }));
-  calendar.removeAllEvents();
-  calendar.addEventSource(events);
+  calendar.getEventSources().forEach(src => src.remove());
+calendar.addEventSource(events);
 }
 
 // ---- Modal ----
